@@ -1,7 +1,7 @@
 
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, make_response, redirect, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from collections import deque
 import markdown
 from passlib.hash import bcrypt
 import sqlite3
@@ -18,8 +18,9 @@ login_manager.init_app(app)
 app.secret_key = "206363ef77d567cc511df5098695d2b85058952afd5e2b1eecd5aed981805e60"
 
 DATABASE = "./sqlite3.db"
-bcrypt.rounds = 128
 bleach.ALLOWED_TAGS.append(u"b")
+BCRYPT_ROUNDS = 12
+FAILED_LOGIN_STREAK_BEFORE_SUSPEND = 4
 
 
 class User(UserMixin):
@@ -31,20 +32,52 @@ def user_loader(username):
     if username is None:
         return None
 
-    db = sqlite3.connect(DATABASE)
+    db = sqlite3.connect(
+        DATABASE, detect_types=sqlite3.PARSE_DECLTYPES)
     sql = db.cursor()
     sql.execute(
-        f"SELECT username, password FROM user WHERE username = ?", (username,))
+        f"SELECT username, password, failed_login_streak, suspended_until FROM user WHERE username = ?", (username,))
     row = sql.fetchone()
+    db.close()
     try:
-        username, password = row
+        username, password, failed_login_streak, suspended_until = row
     except:
         return None
 
     user = User()
     user.id = username
     user.password = password
+    user.failed_login_streak = failed_login_streak
+    user.suspended_until = suspended_until
     return user
+
+
+def suspend_user(username):
+    db = sqlite3.connect(DATABASE)
+    sql = db.cursor()
+    suspend_until = datetime.now()+timedelta(0, 600)
+    sql.execute(
+        "UPDATE user SET suspended_until = ? WHERE username = ?", (suspend_until,  username,))
+    db.commit()
+    db.close()
+
+
+def pardon_user(username):
+    db = sqlite3.connect(DATABASE)
+    sql = db.cursor()
+    sql.execute(
+        "UPDATE user SET suspended_until=? WHERE username=?", (None,  username,))
+    db.commit()
+    db.close()
+
+
+def update_user_failed_login_streak(username, streak):
+    db = sqlite3.connect(DATABASE)
+    sql = db.cursor()
+    sql.execute(
+        "UPDATE user SET failed_login_streak=? WHERE username=?", (streak, username))
+    db.commit()
+    db.close()
 
 
 @login_manager.request_loader
@@ -64,13 +97,30 @@ def login():
         user = user_loader(username)
 
         if user is None:
-            return "Nieprawidłowy login lub hasło", 401
+            flash("Wrong username or password")
+            return render_template("index.html")
+
+        if user.suspended_until:
+            if (user.suspended_until > datetime.now()):
+                pardon_user(user.id)
+            else:
+                flash("Your account is suspended, come back in 10 minutes")
 
         if bcrypt.verify(password, user.password):
             login_user(user)
+            if (user.failed_login_streak > 0):
+                update_user_failed_login_streak(username, 0)
+
             return redirect('/hello')
         else:
-            return "Nieprawidłowy login lub hasło", 401
+            flash("Wrong username or password")
+            update_user_failed_login_streak(
+                user.id, user.failed_login_streak + 1)
+            if (user.failed_login_streak > FAILED_LOGIN_STREAK_BEFORE_SUSPEND):
+                suspend_user(username)
+                flash("Your account got suspended for next 10 minutes")
+
+            return render_template("index.html")
 
 
 @app.route("/logout")
@@ -83,14 +133,13 @@ def logout():
 @login_required
 def hello():
     if request.method == 'GET':
-        print(current_user.id)
         username = current_user.id
 
         db = sqlite3.connect(DATABASE)
         sql = db.cursor()
         sql.execute(f"SELECT id FROM notes WHERE username == ?", (username,))
         notes = sql.fetchall()
-
+        db.close()
         return render_template("hello.html", username=username, notes=notes)
 
 
@@ -100,14 +149,13 @@ def render():
     md = request.form.get("markdown", "")
     cleaned = bleach.clean(md)
     rendered = markdown.markdown(md)
-    print(cleaned)
-    print(rendered)
     username = current_user.id
     db = sqlite3.connect(DATABASE)
     sql = db.cursor()
     sql.execute(
         f"INSERT INTO notes (username, note) VALUES (?, ?)", (username, rendered))
     db.commit()
+    db.close()
     return render_template("markdown.html", rendered=rendered)
 
 
@@ -121,10 +169,12 @@ def render_old(rendered_id):
 
     try:
         username, rendered = sql.fetchone()
+        db.close()
         if username != current_user.id:
             return "Access to note forbidden", 403
         return render_template("markdown.html", rendered=rendered)
     except:
+        db.close()
         return "Note not found", 404
 
 
@@ -156,11 +206,11 @@ def register():
             return render_template("register.html")
         db = sqlite3.connect(DATABASE)
         sql = db.cursor()
-        sql.execute(f"INSERT INTO user (username, password) VALUES (?, ?);",
-                    (username, bcrypt.hash(password),))
+        sql.execute(f"INSERT INTO user (username, password, failed_login_streak) VALUES (?, ?, ?);",
+                    (username, bcrypt.using(round=BCRYPT_ROUNDS).hash(password), 0))
 
         db.commit()
-
+        db.close()
         return redirect('/')
 
 
@@ -168,17 +218,17 @@ if __name__ == "__main__":
     print("[*] Init database!")
     db = sqlite3.connect(DATABASE)
     sql = db.cursor()
-    passwd = bcrypt.hash("123")
+    passwd = bcrypt.using(rounds=BCRYPT_ROUNDS).hash("123")
     sql.execute("DROP TABLE IF EXISTS user;")
     sql.execute(
-        "CREATE TABLE user (username VARCHAR(32), password VARCHAR(128));")
+        "CREATE TABLE user (username VARCHAR(32), password VARCHAR(128), failed_login_streak INTEGER NOT NULL, suspended_until timestamp );")
     sql.execute("DELETE FROM user;")
     sql.execute(
-        f"INSERT INTO user (username, password) VALUES ('bach', '{passwd}');")
+        f"INSERT INTO user (username, password) VALUES ('bach', '{passwd}', 0);")
     sql.execute(
-        f"INSERT INTO user (username, password) VALUES ('john', '{passwd}');")
+        f"INSERT INTO user (username, password) VALUES ('john', '{passwd}', 0);")
     sql.execute(
-        f"INSERT INTO user (username, password) VALUES ('bob', '{passwd}');")
+        f"INSERT INTO user (username, password) VALUES ('bob', '{passwd}', 0);")
 
     sql.execute("DROP TABLE IF EXISTS notes;")
     sql.execute(
