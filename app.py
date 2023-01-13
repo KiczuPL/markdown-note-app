@@ -7,7 +7,7 @@ from passlib.hash import bcrypt
 import sqlite3
 import bleach
 
-from utils.validation import verify_password, verify_username
+from utils.validation import MINIMAL_PASSWORD_ENTROPY, verify_password, verify_password_strength, verify_username
 
 
 app = Flask(__name__)
@@ -52,9 +52,6 @@ def request_loader(request):
     username = request.form.get('username')
     user = user_loader(username)
     return user
-
-
-recent_users = deque(maxlen=3)
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -141,17 +138,22 @@ def register():
         is_valid = True
 
         if not verify_password(password):
-            flash('Your password should have 8-128 characters, at least one uppercase letter, one lowercase letter, one number and one special character')
+            flash(
+                'Your password should have 10-128 characters, numbers and special signs')
+            is_valid = False
+        [password_too_weak, entropy] = verify_password_strength(password)
+        if password_too_weak:
+            flash(
+                f'Password has too low entropy, required entropy: {MINIMAL_PASSWORD_ENTROPY}, your entropy: {entropy}.')
             is_valid = False
         if not verify_username(username):
-            flash('Your username should have 5-20 alphanumeric characters')
+            flash('Your username should have 3-20 alphanumeric characters.')
             is_valid = False
         if user_loader(username):
             flash('Username already taken.')
             is_valid = False
         if not is_valid:
             return render_template("register.html")
-
         db = sqlite3.connect(DATABASE)
         sql = db.cursor()
         sql.execute(f"INSERT INTO user (username, password) VALUES (?, ?);",
