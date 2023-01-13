@@ -105,6 +105,7 @@ def login():
                 pardon_user(user.id)
             else:
                 flash("Your account is suspended, come back in 10 minutes")
+                return render_template("index.html")
 
         if bcrypt.verify(password, user.password):
             login_user(user)
