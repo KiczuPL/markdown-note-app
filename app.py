@@ -1,10 +1,13 @@
-from flask import Flask, render_template, request, make_response, redirect, send_file
+
+from flask import Flask, render_template, request, make_response, redirect, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-import markdown
 from collections import deque
+import markdown
 from passlib.hash import bcrypt
 import sqlite3
 import bleach
+
+from utils.validation import verify_password, verify_username
 
 
 app = Flask(__name__)
@@ -16,6 +19,7 @@ app.secret_key = "206363ef77d567cc511df5098695d2b85058952afd5e2b1eecd5aed981805e
 
 DATABASE = "./sqlite3.db"
 bcrypt.rounds = 128
+bleach.ALLOWED_TAGS.append(u"b")
 
 
 class User(UserMixin):
@@ -97,7 +101,10 @@ def hello():
 @login_required
 def render():
     md = request.form.get("markdown", "")
+    cleaned = bleach.clean(md)
     rendered = markdown.markdown(md)
+    print(cleaned)
+    print(rendered)
     username = current_user.id
     db = sqlite3.connect(DATABASE)
     sql = db.cursor()
@@ -129,12 +136,24 @@ def register():
     if request.method == 'GET':
         return render_template("register.html")
     if request.method == 'POST':
+        username = str(request.form.get('username'))
+        password = str(request.form.get('password'))
+        is_valid = True
+
+        if not verify_password(password):
+            flash('Your password should have 8-128 characters, at least one uppercase letter, one lowercase letter, one number and one special character')
+            is_valid = False
+        if not verify_username(username):
+            flash('Your username should have 5-20 alphanumeric characters')
+            is_valid = False
+        if user_loader(username):
+            flash('Username already taken.')
+            is_valid = False
+        if not is_valid:
+            return render_template("register.html")
+
         db = sqlite3.connect(DATABASE)
         sql = db.cursor()
-
-        username = request.form.get('username')
-        password = request.form.get('password')
-
         sql.execute(f"INSERT INTO user (username, password) VALUES (?, ?);",
                     (username, bcrypt.hash(password),))
 
