@@ -38,7 +38,7 @@
 <h1> Your notes: </h1>
 <ul>
 {% for note in notes %}
-  <li><a href="{{ url_for('render') }}/{{note.0}}"> Note {{ loop.index }}</a></li>
+  <li><a href="{{ url_for('get_note', rendered_id=note.0) }}"> Note {{ loop.index }}</a></li>
 {% endfor %}
 </ul>
 

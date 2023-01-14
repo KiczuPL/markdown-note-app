@@ -6,7 +6,7 @@ import markdown
 from passlib.hash import bcrypt
 import sqlite3
 import bleach
-from utils.encryption import encrypt_note
+from utils.encryption import decrypt_note, encrypt_note
 
 from utils.validation import MINIMAL_PASSWORD_ENTROPY, verify_password, verify_password_strength, verify_username
 
@@ -207,11 +207,11 @@ def render():
             f"INSERT INTO notes (username, note, public, password_hash, AES_salt, init_vector) VALUES (?, ?, ?, ?, ?, ?)", (username, encrypted, public, encryption_password_hash, salt, init_vector))
         db.commit()
         db.close()
-        print("SSSSS")
+        # print("SSSSS")
         return render_template("markdown.html", rendered=rendered)
 
     else:
-        print("ASSAS")
+        # print("ASSAS")
         cleaned = bleach.clean(md)
         rendered = markdown.markdown(cleaned)
         username = current_user.id
@@ -224,24 +224,100 @@ def render():
         return render_template("markdown.html", rendered=rendered)
 
 
-@app.route("/render/<rendered_id>")
+# get to note, will redirect to proper link if note is encrypted or not
+@app.route("/note/<rendered_id>", methods=['GET'])
 @login_required
-def render_old(rendered_id):
+def get_note(rendered_id):
     db = sqlite3.connect(DATABASE)
     sql = db.cursor()
-    sql.execute(f"SELECT username, note, public, password_hash, AES_salt, init_vector FROM notes WHERE id == ?",
+    sql.execute(f"SELECT id, username, public, password_hash FROM notes WHERE id == ?",
                 (rendered_id,))
 
     try:
-        username, note, public, password_hash, AES_salt, init_vector = sql.fetchone()
+        note_id, username,  public, password_hash = sql.fetchone()
         db.close()
         if username != current_user.id and not public:
             return "Access to note forbidden", 403
 
-        return render_template("markdown.html", rendered=rendered)
+        if password_hash:
+            return redirect(f"/note/encrypted/{note_id}")
+        return redirect(f"/note/unencrypted/{note_id}")
     except:
         db.close()
         return "Note not found", 404
+
+
+# Reneder unencrypted note
+@app.route("/note/unencrypted/<rendered_id>")
+@login_required
+def render_unencrypted(rendered_id):
+    db = sqlite3.connect(DATABASE)
+    sql = db.cursor()
+    sql.execute(f"SELECT username, note, public, password_hash FROM notes WHERE id == ?",
+                (rendered_id,))
+
+    try:
+        username, note, public, password_hash = sql.fetchone()
+        db.close()
+        if (password_hash):
+            return "Access to note forbidden", 403
+        if username != current_user.id and not public:
+            return "Access to note forbidden", 403
+
+        return render_template("markdown.html", rendered=note)
+    except:
+        db.close()
+        return "Note not found", 404
+
+
+@app.route("/note/encrypted/<rendered_id>", methods=['GET', 'POST'])
+@login_required
+def render_encrypted(rendered_id):
+    if request.method == 'GET':
+        db = sqlite3.connect(DATABASE)
+        sql = db.cursor()
+        sql.execute(f"SELECT id, username, public, password_hash FROM notes WHERE id == ?",
+                    (rendered_id,))
+
+        try:
+            id, username, public, password_hash = sql.fetchone()
+            db.close()
+            if not password_hash:
+                return "Access to note forbidden", 403
+            if username != current_user.id and not public:
+                return "Access to note forbidden", 403
+
+            return render_template("decipher.html", id=id)
+        except:
+            db.close()
+            return "Note not found", 404
+
+    if request.method == 'POST':
+        password = str(request.form.get("password"))
+        if password is None:
+            flash("Wrong password")
+            return render_template("decipher.html", id=id)
+
+        db = sqlite3.connect(DATABASE)
+        sql = db.cursor()
+        sql.execute(f"SELECT id, username, note, public, password_hash, AES_salt, init_vector  FROM notes WHERE id == ?",
+                    (rendered_id,))
+
+        try:
+            id, username, note, public, password_hash, salt, init_vector = sql.fetchone()
+            db.close()
+            if username != current_user.id and not public:
+                return "Access to note forbidden", 403
+            if (bcrypt.verify(password, password_hash)):
+                decrypted_note = decrypt_note(
+                    note, password, salt, init_vector)
+                return render_template("markdown.html", rendered=decrypted_note)
+            else:
+                flash("Wrong password")
+                return render_template("decipher.html", id=id)
+        except:
+            db.close()
+            return "Note not found", 404
 
 
 @app.route("/user/register", methods=['GET', 'POST'])
