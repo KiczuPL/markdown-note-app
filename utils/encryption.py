@@ -1,11 +1,7 @@
-import requests
-import datetime
-from passlib.hash import bcrypt
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Hash import SHA512
-from math import log2
 import base64
 
 
@@ -30,9 +26,3 @@ def decrypt_note(note_base64: str, password: str, salt_base64: str, init_vector_
     key = PBKDF2(password, salt, 32, count=1000000, hmac_hash_module=SHA512)
     aes = AES.new(key, AES.MODE_CBC, init_vector)
     return base64.b64decode(aes.decrypt(note)).decode()
-
-
-note = "w banieaaa"
-passwd = "sranie"
-[enc, salt, vec] = encrypt_note(note, passwd)
-print(base64.b64encode(get_random_bytes(16)))

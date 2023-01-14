@@ -5,18 +5,34 @@
 
 <form action={{ url_for('render') }} method="post">
   <label for="markdown">Input your new note:</label><br>
-  <textarea id="markdown" name="markdown" rows="20" cols="100"></textarea>
+  <textarea id="markdown" name="markdown" rows="20" cols="100">{{raw_note}}</textarea>
   <br>
   <div>
-    <input type="checkbox" name="isPublic" >
-    <text>Public</text>
+    <label for="public">Public</label>
+    <input type="checkbox" name="public" id="public" >
   </div>
   <div>
-    <input type="checkbox" name="isCiphered" >
-    <text>Encrypt</text>
+    <label for="encrypt">Encrypt</label>
+    <input type="checkbox" name="encrypt" id="encrypt" >
   </div>
+  <div>
+    <text>Encryption password</text>
+    <input type="password" name="password">
+  </div>
+  
   <input type="submit" value="Submit">
 </form>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <ul class=flashes>
+    {% for category, message in messages %}
+      <div>{{ message }}</div>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+
 
 {% if notes|length > 0 %}
 <h1> Your notes: </h1>
