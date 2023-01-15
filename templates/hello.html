@@ -23,6 +23,11 @@
 
 <form action={{ url_for('render') }} method="post">
   <label for="markdown">Input your new note:</label><br>
+  <div class="form-group row">
+    <div class="col-auto">
+      <input class="form-control" placeholder="Title" type="text" name="title" value={{title}}>
+    </div>
+  </div>
   <textarea  id="markdown" name="markdown" rows="20" cols="100">{{raw_note}}</textarea>
   <br>
   <div class="form-check mt-2">
@@ -66,7 +71,7 @@
   <tr>
     <th scope="row">{{loop.index}}</th>
     <td>{{ note.1 }}</td>
-    <td>TITLE</td>
+    <td>{{ note.2 }}</td>
     <td><button class="btn btn-primary btn-sm">View</button></td>
   </tr>
 {% endfor %}

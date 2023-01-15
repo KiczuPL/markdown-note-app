@@ -22,6 +22,15 @@ def verify_username(username: str):
     return True
 
 
+def verify_note_title(title: str):
+    #regex = r"^[a-zA-Z0-9@$!%*?&- ]{1,25}$"
+    #match = re.compile(regex)
+    #res = re.search(match, title)
+    if title is None or title.isspace() or len(title) < 1 or len(title) > 25:
+        return False
+    return True
+
+
 def verify_password_strength(password: str):
     entropy = 0.0
     hist = {}

@@ -8,7 +8,7 @@ import sqlite3
 import bleach
 from utils.encryption import decrypt_note, encrypt_note
 
-from utils.validation import MINIMAL_PASSWORD_ENTROPY, verify_password, verify_password_strength, verify_username
+from utils.validation import MINIMAL_PASSWORD_ENTROPY, verify_note_title, verify_password, verify_password_strength, verify_username
 
 from flask_bootstrap import Bootstrap4
 
@@ -139,28 +139,37 @@ def logout():
 @login_required
 def hello():
     if request.method == 'GET':
-        username = current_user.id
-
-        db = sqlite3.connect(DATABASE)
-        sql = db.cursor()
-        sql.execute(
-            f"SELECT id, username FROM notes WHERE username == ? OR public=1", (username,))
-        notes = sql.fetchall()
-        print(notes)
-        db.close()
-        return render_template("hello.html", username=username, notes=notes)
+        return render_template("hello.html", username=current_user.id, notes=get_user_notes(current_user.id))
 
 
-@app.route("/render", methods=['POST'])
-@login_required
+def get_user_notes(username):
+    db = sqlite3.connect(DATABASE)
+    sql = db.cursor()
+    sql.execute(
+        f"SELECT id, username, title FROM notes WHERE username == ? OR public=1", (username,))
+    notes = sql.fetchall()
+    # print(notes)
+    db.close()
+    return notes
+
+
+@ app.route("/render", methods=['POST'])
+@ login_required
 def render():
     md = str(request.form.get("markdown", ""))
+    title = str(request.form.get("title"))
     public = request.form.get("public")
     encrypt = request.form.get("encrypt")
     encryption_password = str(request.form.get("password"))
     flags_invalid = False
 
-    #print([md, public, encrypt, encryption_password])
+    # print([md, public, encrypt, encryption_password])
+    if title == 'None' or title == "" or title.isspace():
+        flash("Your note needs a title")
+        return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
+    if not verify_note_title(title):
+        flash("Title can contain 1-25 alphanumeric characters and special signs")
+        return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
 
     if public == None:
         public = False
@@ -177,27 +186,26 @@ def render():
 
     if flags_invalid:
         flash("Something is wrong in render request")
-        return redirect("/hello")
+        return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
     if not md or md.isspace():
         flash("Note is empty")
-        return redirect("/hello")
+        return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
 
     if encrypt and public:
         flash("Encrypted notes cannot be public")
-        return render_template("hello.html", raw_note=md)
+        return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
 
     if encrypt:
         if not verify_password(encryption_password):
             flash(
                 'Your password should have 10-128 characters, numbers and special signs')
-            return render_template("hello.html", raw_note=md)
-
+            return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
         [password_too_weak, entropy] = verify_password_strength(
             encryption_password)
         if password_too_weak:
             flash(
                 f'Password has too low entropy, required entropy: {MINIMAL_PASSWORD_ENTROPY}, your entropy: {entropy}.')
-            return render_template("hello.html", raw_note=md)
+            return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
 
         cleaned = bleach.clean(md)
         rendered = markdown.markdown(cleaned)
@@ -207,11 +215,11 @@ def render():
             rendered, encryption_password)
         encryption_password_hash = bcrypt.using(
             rounds=BCRYPT_ROUNDS).hash(encryption_password)
-
+        title_cleaned = bleach.clean(title)
         db = sqlite3.connect(DATABASE)
         sql = db.cursor()
         sql.execute(
-            f"INSERT INTO notes (username, note, public, password_hash, AES_salt, init_vector) VALUES (?, ?, ?, ?, ?, ?)", (username, encrypted, public, encryption_password_hash, salt, init_vector))
+            f"INSERT INTO notes (username, title, note, public, password_hash, AES_salt, init_vector) VALUES (?, ?, ?, ?, ?, ?, ?)", (username, title_cleaned, encrypted, public, encryption_password_hash, salt, init_vector))
         db.commit()
         db.close()
         # print("SSSSS")
@@ -222,10 +230,11 @@ def render():
         cleaned = bleach.clean(md)
         rendered = markdown.markdown(cleaned)
         username = current_user.id
+        title_cleaned = bleach.clean(title)
         db = sqlite3.connect(DATABASE)
         sql = db.cursor()
         sql.execute(
-            f"INSERT INTO notes (username, note, public) VALUES (?, ?, ?)", (username, rendered, public))
+            f"INSERT INTO notes (username, title, note, public) VALUES (?, ?, ?, ?)", (username, title_cleaned, rendered, public))
         db.commit()
         db.close()
         return render_template("markdown.html", rendered=rendered)
@@ -381,10 +390,10 @@ if __name__ == "__main__":
 
     sql.execute("DROP TABLE IF EXISTS notes;")
     sql.execute(
-        f"CREATE TABLE notes (id INTEGER PRIMARY KEY, username VARCHAR(32), note VARCHAR({NOTE_MAX_LENGTH}), public INTEGER NOT NULL, password_hash VARCHAR(128), AES_salt VARCHAR(25), init_vector VARCHAR(25));")
+        f"CREATE TABLE notes (id INTEGER PRIMARY KEY, username VARCHAR(32), title VARCHAR(32), note VARCHAR({NOTE_MAX_LENGTH}), public INTEGER NOT NULL, password_hash VARCHAR(128), AES_salt VARCHAR(25), init_vector VARCHAR(25));")
     sql.execute("DELETE FROM notes;")
     sql.execute(
-        "INSERT INTO notes (username, note, id, public) VALUES ('bob', 'To jest sekret!', 1, 0);")
+        "INSERT INTO notes (username, note, id, public, title) VALUES ('bob', 'To jest sekret!', 1, 0,'note_title');")
     db.commit()
 
     app.run("0.0.0.0", 5000, debug=True)
