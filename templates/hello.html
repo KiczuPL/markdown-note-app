@@ -72,7 +72,10 @@
     <th scope="row">{{loop.index}}</th>
     <td>{{ note.1 }}</td>
     <td>{{ note.2 }}</td>
-    <td><button class="btn btn-primary btn-sm">View</button></td>
+    <td>
+      <form action="{{ url_for('get_note', rendered_id=note.0) }}""">
+        <button class="btn btn-primary btn-sm" type="submit">View</button>
+    </form></td>
   </tr>
 {% endfor %}
   </tbody>

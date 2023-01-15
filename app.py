@@ -215,11 +215,10 @@ def render():
             rendered, encryption_password)
         encryption_password_hash = bcrypt.using(
             rounds=BCRYPT_ROUNDS).hash(encryption_password)
-        title_cleaned = bleach.clean(title)
         db = sqlite3.connect(DATABASE)
         sql = db.cursor()
         sql.execute(
-            f"INSERT INTO notes (username, title, note, public, password_hash, AES_salt, init_vector) VALUES (?, ?, ?, ?, ?, ?, ?)", (username, title_cleaned, encrypted, public, encryption_password_hash, salt, init_vector))
+            f"INSERT INTO notes (username, title, note, public, password_hash, AES_salt, init_vector) VALUES (?, ?, ?, ?, ?, ?, ?)", (username, title, encrypted, public, encryption_password_hash, salt, init_vector))
         db.commit()
         db.close()
         # print("SSSSS")
@@ -230,11 +229,10 @@ def render():
         cleaned = bleach.clean(md)
         rendered = markdown.markdown(cleaned)
         username = current_user.id
-        title_cleaned = bleach.clean(title)
         db = sqlite3.connect(DATABASE)
         sql = db.cursor()
         sql.execute(
-            f"INSERT INTO notes (username, title, note, public) VALUES (?, ?, ?, ?)", (username, title_cleaned, rendered, public))
+            f"INSERT INTO notes (username, title, note, public) VALUES (?, ?, ?, ?)", (username, title, rendered, public))
         db.commit()
         db.close()
         return render_template("markdown.html", rendered=rendered)
