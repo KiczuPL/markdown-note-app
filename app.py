@@ -41,48 +41,79 @@ def user_loader(username):
         DATABASE, detect_types=sqlite3.PARSE_DECLTYPES)
     sql = db.cursor()
     sql.execute(
-        f"SELECT username, password, failed_login_streak, suspended_until FROM user WHERE username = ?", (username,))
+        f"SELECT username, password FROM user WHERE username = ?", (username,))
     row = sql.fetchone()
     db.close()
     try:
-        username, password, failed_login_streak, suspended_until = row
+        username, password = row
     except:
         return None
 
     user = User()
     user.id = username
     user.password = password
-    user.failed_login_streak = failed_login_streak
-    user.suspended_until = suspended_until
     return user
 
 
-def suspend_user(username):
+def suspend_ip_address(ip_address):
     db = sqlite3.connect(DATABASE)
     sql = db.cursor()
     suspend_until = datetime.now()+timedelta(0, 600)
-    sql.execute(
-        "UPDATE user SET suspended_until = ? WHERE username = ?", (suspend_until,  username,))
+    sql.execute("UPDATE banned_ips SET banned_until=? WHERE ip_address=?",
+                (suspend_until, ip_address,))
     db.commit()
+
+    sql.execute(
+        "SELECT banned_until FROM banned_ips WHERE ip_address=?", (ip_address,))
+
+    banned_until, = sql.fetchone()
     db.close()
 
 
-def pardon_user(username):
-    db = sqlite3.connect(DATABASE)
+def is_ip_address_suspended(ip_address):
+    db = sqlite3.connect(DATABASE, detect_types=sqlite3.PARSE_DECLTYPES)
     sql = db.cursor()
     sql.execute(
-        "UPDATE user SET suspended_until=? WHERE username=?", (None,  username,))
-    db.commit()
-    db.close()
+        "SELECT banned_until FROM banned_ips WHERE ip_address=?", (ip_address,))
+
+    try:
+        banned_until, = sql.fetchone()
+        if banned_until < datetime.now():
+            pardon_ip_address(ip_address)
+            return False
+        return True
+    except:
+        return False
 
 
-def update_user_failed_login_streak(username, streak):
+def pardon_ip_address(ip_address):
     db = sqlite3.connect(DATABASE)
     sql = db.cursor()
-    sql.execute(
-        "UPDATE user SET failed_login_streak=? WHERE username=?", (streak, username))
+    sql.execute("DELETE FROM banned_ips WHERE ip_address=?", (ip_address,))
     db.commit()
     db.close()
+
+
+def increase_ip_address_failed_login_streak(ip_address):
+    db = sqlite3.connect(DATABASE)
+    sql = db.cursor()
+
+    sql.execute(
+        "SELECT failed_login_streak FROM banned_ips WHERE ip_address=?", (ip_address,))
+    try:
+        streak, = sql.fetchone()
+        if streak > FAILED_LOGIN_STREAK_BEFORE_SUSPEND:
+            suspend_ip_address(ip_address)
+        sql.execute(
+            "UPDATE banned_ips SET failed_login_streak=? WHERE ip_address=?", (streak+1, ip_address,))
+
+    except:
+        streak = 1
+        sql.execute(
+            "INSERT INTO banned_ips (ip_address, failed_login_streak) VALUES (?, ?)", (ip_address, streak,))
+    db.commit()
+    db.close()
+    return streak+1 > FAILED_LOGIN_STREAK_BEFORE_SUSPEND
 
 
 @login_manager.request_loader
@@ -92,51 +123,44 @@ def request_loader(request):
     return user
 
 
-@app.route("/", methods=["GET", "POST"])
+@ app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
         return render_template("index.html")
     if request.method == "POST":
         username = str(request.form.get("username"))
         password = str(request.form.get("password"))
+        sender_ip = request.remote_addr
         user = user_loader(username)
 
         if user is None:
             flash("Wrong username or password")
             return render_template("index.html")
 
-        if user.suspended_until:
-            if (user.suspended_until < datetime.now()):
-                pardon_user(user.id)
-            else:
-                flash("Your account is suspended, come back in 10 minutes")
-                return render_template("index.html")
+        if is_ip_address_suspended(sender_ip):
+            flash("Your ip address is suspended, come back in 10 minutes")
+            return render_template("index.html")
 
         if bcrypt.verify(password, user.password):
             login_user(user)
-            if (user.failed_login_streak > 0):
-                update_user_failed_login_streak(username, 0)
-
             return redirect('/hello')
         else:
             flash("Wrong username or password")
-            update_user_failed_login_streak(
-                user.id, user.failed_login_streak + 1)
-            if (user.failed_login_streak > FAILED_LOGIN_STREAK_BEFORE_SUSPEND):
-                suspend_user(username)
-                flash("Your account got suspended for next 10 minutes")
+            if increase_ip_address_failed_login_streak(sender_ip):
+                flash("Your ip address got suspended for next 10 minutes")
 
             return render_template("index.html")
 
 
-@app.route("/logout")
+@ app.route("/logout",  methods=["POST"])
+@ login_required
 def logout():
     logout_user()
     return redirect("/")
 
 
-@app.route("/hello", methods=['GET'])
-@login_required
+@ app.route("/hello", methods=['GET'])
+@ login_required
 def hello():
     if request.method == 'GET':
         return render_template("hello.html", username=current_user.id, notes=get_user_notes(current_user.id))
@@ -239,8 +263,8 @@ def render():
 
 
 # get to note, will redirect to proper link if note is encrypted or not
-@app.route("/note/<rendered_id>", methods=['GET'])
-@login_required
+@ app.route("/note/<rendered_id>", methods=['GET'])
+@ login_required
 def get_note(rendered_id):
     if request.method == "GET":
         db = sqlite3.connect(DATABASE)
@@ -262,11 +286,10 @@ def get_note(rendered_id):
             return "Note not found", 404
 
 
-@app.route("/note/<rendered_id>/delete", methods=['POST'])
-@login_required
+@ app.route("/note/<rendered_id>/delete", methods=['POST'])
+@ login_required
 def delete_note(rendered_id):
     if request.method == "POST":
-        print("C")
         db = sqlite3.connect(DATABASE)
         sql = db.cursor()
         sql.execute(
@@ -289,11 +312,9 @@ def delete_note(rendered_id):
             db.close()
             return "Note not found", 404
 
-# Reneder unencrypted note
 
-
-@app.route("/note/unencrypted/<rendered_id>")
-@login_required
+@ app.route("/note/unencrypted/<rendered_id>")
+@ login_required
 def render_unencrypted(rendered_id):
     db = sqlite3.connect(DATABASE)
     sql = db.cursor()
@@ -314,8 +335,8 @@ def render_unencrypted(rendered_id):
         return "Note not found", 404
 
 
-@app.route("/note/encrypted/<rendered_id>", methods=['GET', 'POST'])
-@login_required
+@ app.route("/note/encrypted/<rendered_id>", methods=['GET', 'POST'])
+@ login_required
 def render_encrypted(rendered_id):
     if request.method == 'GET':
         db = sqlite3.connect(DATABASE)
@@ -364,7 +385,7 @@ def render_encrypted(rendered_id):
             return "Note not found", 404
 
 
-@app.route("/user/register", methods=['GET', 'POST'])
+@ app.route("/user/register", methods=['GET', 'POST'])
 def register():
     if request.method == 'GET':
         return render_template("register.html")
@@ -400,8 +421,8 @@ def register():
         return redirect('/')
 
 
-@app.route("/user/passwd", methods=['GET', 'POST'])
-@login_required
+@ app.route("/user/passwd", methods=['GET', 'POST'])
+@ login_required
 def change_password():
     if request.method == "GET":
         return render_template("passwd.html")
@@ -452,16 +473,19 @@ if __name__ == "__main__":
     db = sqlite3.connect(DATABASE)
     sql = db.cursor()
     passwd = bcrypt.using(rounds=BCRYPT_ROUNDS).hash("123")
+    sql.execute("DROP TABLE IF EXISTS banned_ips;")
+    sql.execute(
+        "CREATE TABLE banned_ips (ip_address VARCHAR(16), failed_login_streak INTEGER NOT NULL, banned_until timestamp );")
     sql.execute("DROP TABLE IF EXISTS user;")
     sql.execute(
-        "CREATE TABLE user (username VARCHAR(32), password VARCHAR(128), failed_login_streak INTEGER NOT NULL, suspended_until timestamp );")
+        "CREATE TABLE user (username VARCHAR(32), password VARCHAR(128);")
     sql.execute("DELETE FROM user;")
     sql.execute(
-        f"INSERT INTO user (username, password, failed_login_streak) VALUES ('bach', '{passwd}', 0);")
+        f"INSERT INTO user (username, password) VALUES ('bach', '{passwd}');")
     sql.execute(
-        f"INSERT INTO user (username, password, failed_login_streak) VALUES ('john', '{passwd}', 0);")
+        f"INSERT INTO user (username, password) VALUES ('john', '{passwd}');")
     sql.execute(
-        f"INSERT INTO user (username, password, failed_login_streak) VALUES ('bob', '{passwd}', 0);")
+        f"INSERT INTO user (username, password) VALUES ('bob', '{passwd}');")
 
     sql.execute("DROP TABLE IF EXISTS notes;")
     sql.execute(

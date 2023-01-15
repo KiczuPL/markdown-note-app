@@ -4,6 +4,11 @@ from math import log2
 MINIMAL_PASSWORD_ENTROPY = 3.4
 
 
+def verify_note_content(note: str):
+    is_valid = True
+    messages = []
+
+
 def verify_password(password: str):
     regex = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{10,128}$"
     match = re.compile(regex)
