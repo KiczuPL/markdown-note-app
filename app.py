@@ -157,14 +157,14 @@ def get_user_notes(username):
 @ login_required
 def render():
     md = str(request.form.get("markdown", ""))
-    title = str(request.form.get("title"))
+    title = request.form.get("title")
     public = request.form.get("public")
     encrypt = request.form.get("encrypt")
     encryption_password = str(request.form.get("password"))
     flags_invalid = False
 
     # print([md, public, encrypt, encryption_password])
-    if title == 'None' or title == "" or title.isspace():
+    if title is None or title == "" or title.isspace():
         flash("Your note needs a title")
         return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
     if not verify_note_title(title):
@@ -368,6 +368,53 @@ def register():
         db.commit()
         db.close()
         return redirect('/')
+
+
+@app.route("/user/passwd", methods=['GET', 'POST'])
+@login_required
+def change_password():
+    if request.method == "GET":
+        return render_template("passwd.html")
+    if request.method == "POST":
+        password = str(request.form.get("password_old"))
+        password_new = str(request.form.get("password_new"))
+        password_retyped = str(request.form.get("password_retyped"))
+
+        db = sqlite3.connect(
+            DATABASE, detect_types=sqlite3.PARSE_DECLTYPES)
+        sql = db.cursor()
+        sql.execute(
+            f"SELECT password FROM user WHERE username = ?", (current_user.id,))
+        password_hash, = sql.fetchone()
+
+        if bcrypt.verify(password, password_hash):
+            is_valid = True
+            if not verify_password(password_new):
+                flash(
+                    'Your password should have 10-128 characters, numbers and special signs')
+                is_valid = False
+            [password_too_weak, entropy] = verify_password_strength(
+                password_new)
+
+            if password_too_weak:
+                flash(
+                    f'Password has too low entropy, required entropy: {MINIMAL_PASSWORD_ENTROPY}, your entropy: {entropy}.')
+                is_valid = False
+            if password_new != password_retyped:
+                flash("Retyped password is different than new password.")
+                is_valid = False
+            if not is_valid:
+                return render_template("passwd.html")
+
+            sql.execute(
+                "UPDATE user SET password=? WHERE username=?", (bcrypt.using(rounds=BCRYPT_ROUNDS).hash(password_new), current_user.id,))
+            db.commit()
+            db.close()
+            return redirect("/hello")
+        else:
+            db.close()
+            flash("Wrong password.")
+            return render_template("passwd.html")
 
 
 if __name__ == "__main__":

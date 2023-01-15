@@ -1,9 +1,0 @@
-.outerLoginBox {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.innerLoginBox {
-  padding: 5px;
-  border: 3px solid green;
-}

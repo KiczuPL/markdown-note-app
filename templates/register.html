@@ -12,12 +12,12 @@
           <button  class="btn btn-primary" type="submit" value="Submit">Register</button>
         </form>
         {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for category, message in messages %}
-            <p  class="text-align-left-wrap m-1" style="width: 13em; font-size: 14px; color: RED;" >{{ message }}</p>
-          {% endfor %}
-        {% endif %}
-      {% endwith %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <p class="text-align-left-wrap m-1" style="width: 13em; font-size: 14px; color: RED;" >{{ message }}</p>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
       <form action={{ url_for('login') }}>
         <button class="btn btn-primary" type="submit" value="Register">Go back</button>
       </form>

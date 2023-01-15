@@ -4,20 +4,27 @@
 <div class="container" >
   <div class="align-baseline" >
     <div class="row h-100 justify-content-center align-items-center" >
-      <div class="align-middle mw-10 p-3 border rounded shadow ">
+      <div class="align-middle mw-10 p-3 border rounded shadow">
 
         <div class="container-fluid">
           <div class="row justify-content-between">
-            <div class="col-xs-6">
-              <h1>Hello {{ username }}!</h1>
-            </div>
-
-            <div class="col-xs-6 align-self-end">
-              <form action={{ url_for('logout') }}>
-                <button  class="btn btn-primary pull-right" type="submit" value="Log out" >Log out</button>
-              </form>
-            </div>
-           
+              <div class="col-xs-6 align-self-start">
+                <h1>Hello {{ username }}!</h1>
+              </div>
+              <div class="justify-content-end">
+                <div class="row justify-content-end">
+                  <div class="col-xs-6 align-self-end mr-3">
+                    <form action="{{ url_for('change_password') }}">
+                      <button  class="btn btn-primary pull-right" type="submit">Set password</button>
+                    </form>
+                  </div>
+                  <div class="col-xs-6 align-self-end">
+                    <form action={{ url_for('logout') }}>
+                      <button  class="btn btn-primary pull-right  mr-3" type="submit">Log out</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
           </div>
         </div>
 
@@ -28,7 +35,7 @@
       <input class="form-control" placeholder="Title" type="text" name="title" value={{title}}>
     </div>
   </div>
-  <textarea  id="markdown" name="markdown" rows="20" cols="100">{{raw_note}}</textarea>
+  <textarea  class="form-control" id="markdown" name="markdown" rows="20" cols="100">{{raw_note}}</textarea>
   <br>
   <div class="form-check mt-2">
     <input class="form-check-input" type="checkbox" name="public" id="public" >
