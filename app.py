@@ -144,8 +144,9 @@ def hello():
         db = sqlite3.connect(DATABASE)
         sql = db.cursor()
         sql.execute(
-            f"SELECT id FROM notes WHERE username == ? OR public=1", (username,))
+            f"SELECT id, username FROM notes WHERE username == ? OR public=1", (username,))
         notes = sql.fetchall()
+        print(notes)
         db.close()
         return render_template("hello.html", username=username, notes=notes)
 

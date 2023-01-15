@@ -6,53 +6,74 @@
     <div class="row h-100 justify-content-center align-items-center" >
       <div class="align-middle mw-10 p-3 border rounded shadow ">
 
-<h1>Hello {{ username }}!</h1>
+        <div class="container-fluid">
+          <div class="row justify-content-between">
+            <div class="col-xs-6">
+              <h1>Hello {{ username }}!</h1>
+            </div>
 
-<form action={{ url_for('logout') }}>
-  <input type="submit" value="Log out" />
-</form>
+            <div class="col-xs-6 align-self-end">
+              <form action={{ url_for('logout') }}>
+                <button  class="btn btn-primary pull-right" type="submit" value="Log out" >Log out</button>
+              </form>
+            </div>
+           
+          </div>
+        </div>
 
 <form action={{ url_for('render') }} method="post">
   <label for="markdown">Input your new note:</label><br>
-  <textarea id="markdown" name="markdown" rows="20" cols="100">{{raw_note}}</textarea>
+  <textarea  id="markdown" name="markdown" rows="20" cols="100">{{raw_note}}</textarea>
   <br>
-  <div>
-    <label for="public">Public</label>
-    <input type="checkbox" name="public" id="public" >
+  <div class="form-check mt-2">
+    <input class="form-check-input" type="checkbox" name="public" id="public" >
+    <label class="form-check-label" for="public">Public</label>
   </div>
-  <div>
-    <label for="encrypt">Encrypt</label>
-    <input type="checkbox" name="encrypt" id="encrypt" >
+  <div class="form-check">
+    <input class="form-check-input" type="checkbox" name="encrypt" id="encrypt" >
+    <label class="form-check-label xl-1" for="encrypt">Encrypt</label>
   </div>
-  <div>
-    <text>Encryption password</text>
-    <input type="password" name="password">
+  <div class="form-group row g-2 mt-2">
+    <div class="col-auto">
+      <input class="form-control" placeholder="Encryption password" type="password" name="password">
+    </div>
   </div>
-  
-  <input type="submit" value="Submit">
+  <button class="btn btn-primary" type="submit" value="Submit">Save note</button>
 </form>
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
-    <ul class=flashes>
     {% for category, message in messages %}
-      <div>{{ message }}</div>
+    <div  class="text-align-left-wrap  m-1" style="width: 13em; font-size: 14px; color: RED;" >{{ message }}</div>
     {% endfor %}
-    </ul>
   {% endif %}
 {% endwith %}
 
 
 
 {% if notes|length > 0 %}
-<h1> Your notes: </h1>
-<ul>
+<h1> Notes: </h1>
+<table class="table table-stripped table-hover">
+  <thead>
+    <tr>
+      <th scope="col">#</th>
+      <th scope="col">Author</th>
+      <th scope="col">Title</th>
+      <th scope="col"></th>
+    </tr>
+  </thead>
+  <tbody>
 {% for note in notes %}
-  <li><a href="{{ url_for('get_note', rendered_id=note.0) }}"> Note {{ loop.index }}</a></li>
+  <tr>
+    <th scope="row">{{loop.index}}</th>
+    <td>{{ note.1 }}</td>
+    <td>TITLE</td>
+    <td><button class="btn btn-primary btn-sm">View</button></td>
+  </tr>
 {% endfor %}
-</ul>
+  </tbody>
 
 {% endif %}
-
+</table>
 
 
 
