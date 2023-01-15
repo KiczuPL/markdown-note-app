@@ -1,7 +1,16 @@
-<html>
-<body>
+{% extends 'base.html' %}
+{% block  content %}
+
+<div class="container" >
+  <div class="align-baseline" >
+    <div class="row h-100 justify-content-center align-items-center" >
+      <div class="align-middle mw-10 p-3 border rounded shadow ">
+
 <h1>Hello {{ username }}!</h1>
 
+<form action={{ url_for('logout') }}>
+  <input type="submit" value="Log out" />
+</form>
 
 <form action={{ url_for('render') }} method="post">
   <label for="markdown">Input your new note:</label><br>
@@ -45,8 +54,11 @@
 {% endif %}
 
 
-<form action={{ url_for('logout') }}>
-  <input type="submit" value="Log out" />
-</form>
-</body>
-</html>
+
+
+
+</div>
+</div>
+</div>
+</div>
+{% endblock %}

@@ -1,6 +1,6 @@
 
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, make_response, redirect, flash
+from flask import Flask, render_template, request, redirect, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 import markdown
 from passlib.hash import bcrypt
@@ -10,8 +10,10 @@ from utils.encryption import decrypt_note, encrypt_note
 
 from utils.validation import MINIMAL_PASSWORD_ENTROPY, verify_password, verify_password_strength, verify_username
 
+from flask_bootstrap import Bootstrap4
 
 app = Flask(__name__)
+bootstrap = Bootstrap4(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -179,6 +181,10 @@ def render():
         flash("Note is empty")
         return redirect("/hello")
 
+    if encrypt and public:
+        flash("Encrypted notes cannot be public")
+        return render_template("hello.html", raw_note=md)
+
     if encrypt:
         if not verify_password(encryption_password):
             flash(
@@ -276,15 +282,15 @@ def render_encrypted(rendered_id):
     if request.method == 'GET':
         db = sqlite3.connect(DATABASE)
         sql = db.cursor()
-        sql.execute(f"SELECT id, username, public, password_hash FROM notes WHERE id == ?",
+        sql.execute(f"SELECT id, username, password_hash FROM notes WHERE id == ?",
                     (rendered_id,))
 
         try:
-            id, username, public, password_hash = sql.fetchone()
+            id, username, password_hash = sql.fetchone()
             db.close()
             if not password_hash:
                 return "Access to note forbidden", 403
-            if username != current_user.id and not public:
+            if username != current_user.id:
                 return "Access to note forbidden", 403
 
             return render_template("decipher.html", id=id)
@@ -294,19 +300,19 @@ def render_encrypted(rendered_id):
 
     if request.method == 'POST':
         password = str(request.form.get("password"))
-        if password is None:
+        if password is None or not verify_password(password):
             flash("Wrong password")
             return render_template("decipher.html", id=id)
 
         db = sqlite3.connect(DATABASE)
         sql = db.cursor()
-        sql.execute(f"SELECT id, username, note, public, password_hash, AES_salt, init_vector  FROM notes WHERE id == ?",
+        sql.execute(f"SELECT id, username, note, password_hash, AES_salt, init_vector  FROM notes WHERE id == ?",
                     (rendered_id,))
 
         try:
-            id, username, note, public, password_hash, salt, init_vector = sql.fetchone()
+            id, username, note, password_hash, salt, init_vector = sql.fetchone()
             db.close()
-            if username != current_user.id and not public:
+            if username != current_user.id:
                 return "Access to note forbidden", 403
             if (bcrypt.verify(password, password_hash)):
                 decrypted_note = decrypt_note(

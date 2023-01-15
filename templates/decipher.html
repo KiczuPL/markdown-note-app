@@ -1,6 +1,5 @@
-<html>
-<body>
 
+  {% block  content %}
 <form action={{ url_for('render_encrypted',rendered_id=id) }} method="post">
   <div>
     <label for="password">Note password:</text>
@@ -21,5 +20,4 @@
 <form action={{ url_for('hello') }}>
   <input type="submit" value="Go back" />
 </form>
-</body>
-</html>
+{% endblock  content %}
