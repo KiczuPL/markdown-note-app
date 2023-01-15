@@ -70,7 +70,7 @@
       <th scope="col">#</th>
       <th scope="col">Author</th>
       <th scope="col">Title</th>
-      <th scope="col"></th>
+      <th scope="col">Operations</th>
     </tr>
   </thead>
   <tbody>
@@ -80,9 +80,25 @@
     <td>{{ note.1 }}</td>
     <td>{{ note.2 }}</td>
     <td>
-      <form action="{{ url_for('get_note', rendered_id=note.0) }}""">
-        <button class="btn btn-primary btn-sm" type="submit">View</button>
-    </form></td>
+
+
+      <div class="justify-content-end">
+        <div class="row justify-content-end">
+          <div class="col-xs-6 align-self-end mr-3">
+            <form action="{{ url_for('get_note', rendered_id=note.0) }}""">
+              <button class="btn btn-primary btn-sm" type="submit">View</button>
+            </form>
+          </div>
+          <div class="col-xs-6 align-self-end mr-3 {% if not note.1 == username %} invisible {% endif %}  ">
+            <form action="{{ url_for('delete_note', rendered_id=note.0) }}" method="post">
+              <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+            </form>
+          </div>
+        </div>
+      </div>
+  
+  
+    </td>
   </tr>
 {% endfor %}
   </tbody>

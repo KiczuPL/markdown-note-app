@@ -146,7 +146,7 @@ def get_user_notes(username):
     db = sqlite3.connect(DATABASE)
     sql = db.cursor()
     sql.execute(
-        f"SELECT id, username, title FROM notes WHERE username == ? OR public=1", (username,))
+        "SELECT id, username, title FROM notes WHERE username == ? OR public=1", (username,))
     notes = sql.fetchall()
     # print(notes)
     db.close()
@@ -242,26 +242,56 @@ def render():
 @app.route("/note/<rendered_id>", methods=['GET'])
 @login_required
 def get_note(rendered_id):
-    db = sqlite3.connect(DATABASE)
-    sql = db.cursor()
-    sql.execute(f"SELECT id, username, public, password_hash FROM notes WHERE id == ?",
-                (rendered_id,))
+    if request.method == "GET":
+        db = sqlite3.connect(DATABASE)
+        sql = db.cursor()
+        sql.execute(
+            "SELECT id, username, public, password_hash FROM notes WHERE id == ?", (rendered_id,))
 
-    try:
-        note_id, username,  public, password_hash = sql.fetchone()
-        db.close()
-        if username != current_user.id and not public:
-            return "Access to note forbidden", 403
+        try:
+            note_id, username,  public, password_hash = sql.fetchone()
+            db.close()
+            if username != current_user.id and not public:
+                return "Access to note forbidden", 403
 
-        if password_hash:
-            return redirect(f"/note/encrypted/{note_id}")
-        return redirect(f"/note/unencrypted/{note_id}")
-    except:
-        db.close()
-        return "Note not found", 404
+            if password_hash:
+                return redirect(f"/note/encrypted/{note_id}")
+            return redirect(f"/note/unencrypted/{note_id}")
+        except:
+            db.close()
+            return "Note not found", 404
 
+
+@app.route("/note/<rendered_id>/delete", methods=['POST'])
+@login_required
+def delete_note(rendered_id):
+    if request.method == "POST":
+        print("C")
+        db = sqlite3.connect(DATABASE)
+        sql = db.cursor()
+        sql.execute(
+            "SELECT id, username FROM notes WHERE id == ?", (rendered_id,))
+
+        try:
+            note_id, username, = sql.fetchone()
+
+            if username != current_user.id:
+                db.close()
+                return "Access to note forbidden", 403
+
+            sql.execute(
+                "DELETE FROM notes WHERE id == ?", (note_id,))
+
+            db.commit()
+            db.close()
+            return redirect("/hello")
+        except:
+            db.close()
+            return "Note not found", 404
 
 # Reneder unencrypted note
+
+
 @app.route("/note/unencrypted/<rendered_id>")
 @login_required
 def render_unencrypted(rendered_id):
