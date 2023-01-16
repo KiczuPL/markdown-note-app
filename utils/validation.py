@@ -4,9 +4,9 @@ from math import log2
 import bleach
 import markdown
 
-from app import NOTE_MAX_LENGTH
 
 MINIMAL_PASSWORD_ENTROPY = 3.4
+NOTE_MAX_LENGTH = 10000
 
 
 def verify_note_content(note: str):
