@@ -10,10 +10,12 @@ from utils.encryption import decrypt_note, encrypt_note
 
 from utils.validation import MINIMAL_PASSWORD_ENTROPY, verify_note_title, verify_password, verify_password_strength, verify_username
 
-from flask_bootstrap import Bootstrap4
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
-bootstrap = Bootstrap4(app)
+
+
+app.wsgi_app = ProxyFix(app.wsgi_app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -62,11 +64,6 @@ def suspend_ip_address(ip_address):
     sql.execute("UPDATE banned_ips SET banned_until=? WHERE ip_address=?",
                 (suspend_until, ip_address,))
     db.commit()
-
-    sql.execute(
-        "SELECT banned_until FROM banned_ips WHERE ip_address=?", (ip_address,))
-
-    banned_until, = sql.fetchone()
     db.close()
 
 
@@ -130,9 +127,14 @@ def login():
     if request.method == "POST":
         username = str(request.form.get("username"))
         password = str(request.form.get("password"))
-        sender_ip = request.remote_addr
+        sender_ip = request.host
         user = user_loader(username)
 
+        #print("HOST-----------> ", request.host)
+        #print("remote_addr----> ", sender_ip)
+        #print("ENVIRON-------->", request.environ['REMOTE_ADDR'])
+        # print("X-FORWARDED----> ",
+        #      request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr))
         if user is None:
             flash("Wrong username or password")
             return render_template("index.html")
@@ -210,26 +212,26 @@ def render():
 
     if flags_invalid:
         flash("Something is wrong in render request")
-        return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
+        return render_template("hello.html", username=current_user.id, raw_note=md, notes=get_user_notes(current_user.id), title=title)
     if not md or md.isspace():
         flash("Note is empty")
-        return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
+        return render_template("hello.html", username=current_user.id, raw_note=md, notes=get_user_notes(current_user.id), title=title)
 
     if encrypt and public:
         flash("Encrypted notes cannot be public")
-        return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
+        return render_template("hello.html", username=current_user.id, raw_note=md, notes=get_user_notes(current_user.id), title=title)
 
     if encrypt:
         if not verify_password(encryption_password):
             flash(
                 'Your password should have 10-128 characters, numbers and special signs')
-            return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
+            return render_template("hello.html", username=current_user.id, raw_note=md, notes=get_user_notes(current_user.id), title=title)
         [password_too_weak, entropy] = verify_password_strength(
             encryption_password)
         if password_too_weak:
             flash(
                 f'Password has too low entropy, required entropy: {MINIMAL_PASSWORD_ENTROPY}, your entropy: {entropy}.')
-            return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
+            return render_template("hello.html", username=current_user.id, raw_note=md, notes=get_user_notes(current_user.id), title=title)
 
         cleaned = bleach.clean(md)
         rendered = markdown.markdown(cleaned)
