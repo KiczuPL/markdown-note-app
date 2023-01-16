@@ -8,7 +8,7 @@ import sqlite3
 import bleach
 from utils.encryption import decrypt_note, encrypt_note
 
-from utils.validation import MINIMAL_PASSWORD_ENTROPY, verify_note_title, verify_password, verify_password_strength, verify_username
+from utils.validation import MINIMAL_PASSWORD_ENTROPY, verify_note_content, verify_note_title, verify_password, verify_password_strength, verify_username
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -25,9 +25,10 @@ app.secret_key = "206363ef77d567cc511df5098695d2b85058952afd5e2b1eecd5aed981805e
 
 DATABASE = "./sqlite3.db"
 NOTE_MAX_LENGTH = 10000
-bleach.ALLOWED_TAGS.append(u"b")
+bleach.ALLOWED_TAGS = []
 BCRYPT_ROUNDS = 12
 FAILED_LOGIN_STREAK_BEFORE_SUSPEND = 4
+FAILED_LOGIN_STREAK_BAN_TIME_IN_SECONDS = 600
 
 
 class User(UserMixin):
@@ -60,7 +61,7 @@ def user_loader(username):
 def suspend_ip_address(ip_address):
     db = sqlite3.connect(DATABASE)
     sql = db.cursor()
-    suspend_until = datetime.now()+timedelta(0, 600)
+    suspend_until = datetime.now()+timedelta(0, FAILED_LOGIN_STREAK_BAN_TIME_IN_SECONDS)
     sql.execute("UPDATE banned_ips SET banned_until=? WHERE ip_address=?",
                 (suspend_until, ip_address,))
     db.commit()
@@ -192,10 +193,15 @@ def render():
     # print([md, public, encrypt, encryption_password])
     if title is None or title == "" or title.isspace():
         flash("Your note needs a title")
-        return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
+        return render_template("hello.html", username=current_user.id, raw_note=md, notes=get_user_notes(current_user.id), title=title)
     if not verify_note_title(title):
         flash("Title can contain 1-25 alphanumeric characters and special signs")
-        return render_template("hello.html", raw_note=md, notes=get_user_notes(current_user.id), title=title)
+        return render_template("hello.html", username=current_user.id, raw_note=md, notes=get_user_notes(current_user.id), title=title)
+    [is_note_valid, note_valid_messages] = verify_note_content(md)
+    if not is_note_valid:
+        for msg in note_valid_messages:
+            flash(msg)
+        return render_template("hello.html", username=current_user.id, raw_note=md, notes=get_user_notes(current_user.id), title=title)
 
     if public == None:
         public = False
@@ -212,9 +218,6 @@ def render():
 
     if flags_invalid:
         flash("Something is wrong in render request")
-        return render_template("hello.html", username=current_user.id, raw_note=md, notes=get_user_notes(current_user.id), title=title)
-    if not md or md.isspace():
-        flash("Note is empty")
         return render_template("hello.html", username=current_user.id, raw_note=md, notes=get_user_notes(current_user.id), title=title)
 
     if encrypt and public:
