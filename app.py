@@ -127,7 +127,7 @@ def login():
     if request.method == "POST":
         username = str(request.form.get("username"))
         password = str(request.form.get("password"))
-        sender_ip = request.host
+        sender_ip = request.remote_addr
         user = user_loader(username)
 
         #print("HOST-----------> ", request.host)
