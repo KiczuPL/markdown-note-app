@@ -27,7 +27,7 @@ def verify_note_content(note: str):
     res = re.findall(regex, md)
     for image_link in res:
         print(image_link)
-        if not validate_image_link(image_link):
+        if validate_image_link(image_link):
             is_valid = False
             messages.append(f"Image link: [{image_link}] is invalid")
             break
